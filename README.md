@@ -8,8 +8,9 @@ Oxente, cabra! Ele entende linguagem natural, acha memes, baixa mídia
 autorizada, gera imagens quando tem serviço disponível e conversa com
 personalidade só do Nordeste.
 
-> **Status atual: ETAPA 8 (Dashboard completo) concluída.** Veja `PROGRESS.md`
-> para o estado exato do projeto.
+> **Status atual: ETAPA 9 (Atualizador automático via GitHub) concluída.**
+> Veja `PROGRESS.md` para o estado exato e `UPDATE_GUIDE.md` para
+> atualizar/publicar releases na prática.
 
 ## Requisitos
 
@@ -20,19 +21,23 @@ personalidade só do Nordeste.
 ## Instalação e execução
 
 1. Clone este projeto e acesse a pasta.
-2. Dê dois cliques em `START.bat` **ou**:
+2. Dê dois cliques em `START.bat` — ele instala dependências (na
+   primeira vez), compila (se o `dist` ainda não existe) e sobe o
+   **modo produção** (o mesmo código que o atualizador troca):
+   - Painel: **http://localhost:4820**
+   - Login inicial: usuário dashboard, senha **`geraldo123`**.
+     **Troque a senha logo em Configurações.**
+3. Opcional em modo desenvolvimento (tsx com hot-reload, **não é o
+   modo que o atualizador troca**):
    ```
    npm install
    npm run dev
    ```
-3. Abra o painel: **http://localhost:3000**
-4. Login inicial: usuário dashboard, senha **`geraldo123`**.
-   **Troque a senha logo em Configurações.**
-5. Para produção (backend compilado):
-   ```
-   npm run build
-   npm start
-   ```
+   Nesse modo o painel dev fica em http://localhost:3000 (backend na
+   4820 como sempre).
+4. Atualizações: painel → **Atualizações** → configure `owner/repo`
+   do repo público que publica os releases e clique **Verificar no
+   GitHub**. Fluxo completo em `UPDATE_GUIDE.md`.
 
 ## Onde ficam seus dados
 
@@ -74,7 +79,7 @@ Detalhes completos em `ARCHITECTURE.md`.
 | 6 | Voz (Piper TTS) | Concluída |
 | 7 | Imagens e vídeos (geração por IA + envio de catálogo) | Concluída |
 | 8 | Dashboard completo (visão geral + segurança: CSP, logs, sessões) | Concluída |
-| 9 | Atualizador automático via GitHub | Pendente |
+| 9 | Atualizador automático via GitHub | Concluída |
 | 10 | Testes finais e otimização | Pendente |
 
 ## Sobre o WhatsApp

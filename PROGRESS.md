@@ -699,6 +699,160 @@ de senha) + do rótulo "Dashboard completo" do cronograma do README
   origem) — se algo vacilar no browser, é caso para derrapar no
   log, não para desligar CSP.
 
+## ETAPA 9 — Atualizador automático via GitHub ✔ concluída
+
+O Geraldo agora se mantém atualizado sozinho: painel → **Atualizações**
+configura `owner/repo` de um repo público, e o motor busca **releases
+publicados da API aberta do GitHub — sem token, sem login** — baixa o
+pacote, prepara e aplica com backup. Dados do usuário
+(`%APPDATA%\Geraldo`: banco, config, sessão, mídia, logs) **não entram
+na troca** — só código compilado.
+
+### Design consolidado (regras e porquês)
+
+- **Leitura pública, escrita sua**: listar releases é endpoint anônimo
+  da API do GitHub (60 pedidos/h por IP). Nenhum segredo vive no
+  atualizador; token do Lucas existe só pra publicar/push no repo.
+- **Canais**: `stable` pega só release final mais recente;
+  `beta`/`development` também aceitam prerelease mais recente (**hoje
+  os dois são iguais — GitHub não expõe draft**; isso está escrito na
+  UI em vez de prometer o que não existe).
+- **Bundle convention**: um único `.zip` por release com
+  `version.txt` + `backend/` (= conteúdo de `backend/dist`) +
+  `frontend/` (= conteúdo de `frontend/dist`), opcional `START.bat`.
+  Checksum opcional `<pacote>.sha256` — **sem checksum no release o
+  status mostra `verified: null`** (honesto; não inventa verificação).
+- **Máquina de estados**: `check` (GitHub real, 200 mesmo com
+  `ok:false` — o que falhou vai em `error`/`hint` pra tela) →
+  `stage` (teto 400 MB → `<dataDir>/updates/staged/`) → `prepare`
+  (valida `version.txt` + `backend/` + `frontend/` e extrai em
+  `pending/` + `manifest.json`) → `apply` (helper `apply-update.cmd`
+  roda **desatachado**: backup robocopy /E da versão atual → troca
+  /MIR do dist → copia `version.txt` → opcional `START.bat`).
+  A rota `apply` dá **202**, 1,5 s depois o servidor encerra
+  (`ctx.updatesOnApply`) e o Lucas reabre com `START.bat`.
+- **Versão que acompanha o update**: o script copia `version.txt` pra
+  raiz do `backend/`; `utils/version.ts` lê esse arquivo primeiro e
+  cai pro `package.json` só quando não existe — versão nova após o
+  update sem editar `package.json`.
+- **START.bat virou modo PRODUÇÃO** (`npm run start` = `node
+  dist/index.js`, painel na **4820**; build automático só se o dist
+  não existir). O modo dev (tsx/src) continua disponível por
+  `npm run dev` — mas **não carrega o dist atualizado** (documentado,
+  não escondido).
+
+### Implementação
+
+- **`updates/versionUtil.ts`** — parser/comparador de semver (tolera
+  prefixo `v`, datas do GitHub tipo `2026.10.26`, pré-release perde
+  pra final da mesma base; versão podre → conservador, não atualiza).
+- **`updates/githubReleases.ts`** — `parseRelease()` extrai só o que
+  veio de verdade (draft sem `published_at` → fora em todo canal);
+  `pickReleaseForChannel()` ordenado por publicação (data podre cai
+  pro fim); `pickBundleAsset()` escolhe o zip com `created_at` mais
+  novo, empate alfabético (determinístico quando o GitHub bagunça
+  ordem); `pickChecksumAsset()` casa `<pacote>.sha256` case-insensitive.
+- **`updates/netUtils.ts`** — `githubFetchJson` (UA próprio, timeout)
+  e `githubFetchBytes` (**teto de bytes duro: passou do teto → falha
+  e não guarda nada**); `extractZipBundle` via **`tar.exe`** (bsdtar
+  lê zip no Windows 10+; zero dependência — mesmo padrão do Piper).
+- **`updates/updateEngine.ts`** — todo o estado + `writeApplyScript`
+  (`.cmd` com `rem` documentado, `timeout`, backup, /MIR, detecção
+  de erro `robocopy GEQ 8` e `pause` no fim); `startAutoCheck()`
+  respeita `intervalHours` (1–168) e owner/repo vazio não roda.
+- **Plumbing**: `ResolvedPaths.updatesDir` (`<dataDir>/updates`);
+  `AppContext.updates` + `updatesOnApply`; `applyUpdatesSettings()`
+  reusado no merge do config e no novo overlay **`settings.updates`**
+  no banco (`effectiveUpdates()`/`updateUpdates()`; `getPublic()`
+  reflete overlay); schema do PUT com **owner `^[A-Za-z0-9-]+$` e
+  repo `^[A-Za-z0-9._-]+$`** — owner/repo vão direto pra URL da API,
+  então barra/coringa morrem no zod.
+- **Rotas**: `GET /updates/status`, `POST /updates/check` (200 mesmo
+  fracassando), `stage` (201), `discard`, `prepare` (201), `apply`
+  (202 + encerramento 1,5 s depois).
+- **Painel (Atualizações)**: status com badges (repo configurado,
+  canal/automático, resultado do último check), botão **Verificar no
+  GitHub** com changelog em `<pre>` + link pro release + hostname do
+  zip, **Baixar → Preparar → Aplicar com confirmação** (e
+  "Descartar"); config de owner/repo/canal/intervalo/auto-check
+  (input já filtra caracteres pro regex do backend); nota honesta de
+  que a troca toca só código e os dados ficam em `%APPDATA%`.
+- **Repo real + push**: github.com/**guilhermdugrau-jpg/geraldo**
+  (público, conta descartável criada por escolha do Lucas — o
+  `lucasbr3` dos fixtures é fixture mesmo). `.gitignore` antes do
+  primeiro commit (data/, dist/, node_modules/, *.log, .env,
+  smoke-*/); identity + e-mail noreply do id 352999121; push via
+  `http.extraheader=AUTHORIZATION: basic <base64>` com
+  `x-access-token:` — **token nunca na URL do remote nem em disco no
+  repo**; commit **`61d7299` confirmado por `ls-remote`**.
+
+### Bugs apanhados na hora e consertados (porque teste)
+
+- **Parse duplo**: o teste do `pickReleaseForChannel` passava objetos
+  já parseados; a função espera o payload CRU da API (e parseia por
+  dentro). Trocado o fixture pro formato real.
+- **Fixture de checksum com URL errada** (apontando pro `.zip`): o
+  fake resolvia pelo sufixo da URL e caía no ramo errado — fixture
+  corrigido pra URL `.sha256` própria.
+- **`fetch` em porta fechada rejeita** (não devolve estrutura):
+  `githubFetchJson` contra `127.0.0.1:9` — o wrapper não engole erro
+  (o engine decide o que fazer com ele); teste virou
+  `assert.rejects` + caso `bad port` documentado no `netUtils`.
+- **TS2532** no `match[1]` do `extractChecksumHash` (guard extra);
+  **TS2349** no gate do stage concorrente (o TS não acompanha
+  atribuição em callback de Promise → holder em objeto resolve e o
+  teste ficou legível).
+- **`index.ts`**: bloco do ImageEngine comido por um edit (header
+  colado numa linha) — reconstituído no mesmo momento.
+
+### Validações executadas (ETAPA 9)
+
+- `npm run typecheck` backend+frontend ✓; `npm run build` ✓;
+  `npm run test` **211/211** ✓ (+28): comparador de versões, pick
+  por canal/asset/checksum, engine check (happy/404/403/401/vazio/
+  sem owner com URL exata conferida), stage (checksum ok/recusado
+  sem guardar nada/podre na rede→`verified:null`/concorrência/sem
+  update/sem zip), prepare (manifest + bundles podres), apply
+  (script gerado) + **execução REAL do `apply-update.cmd` no
+  sandbox** — backup + /MIR + `version.txt` provados em disco — e
+  `extractZipBundle` com zip de verdade via tar.exe; no smoke da
+  API: status honesto, PUT persistindo updates, regex travando
+  barra no owner, check 401 legível, discard ok, apply sem prepare
+  → 400 com servidor vivo.
+- **Smoke com rede REAL** (`Temp\opencode\smoke-etapa9`, prod):
+  settings `yt-dlp/yt-dlp · stable · autoCheck false` →
+  `POST /updates/check` atingiu o GitHub de verdade **sem token**:
+  latest `2026.10.26`, `hasUpdate: true` vs `0.1.0`, changelog real e
+  **zip real escolhido do release** (`yt-dlp_win_arm64.zip`);
+  `GET /updates/status` → `configured: true` + lastCheck real. Log do
+  backend confere: `verificação de atualização: atual=0.1.0 ·
+  última=2026.10.26 · nova=true`.
+- **Fluxo de imagem via painel** (mesmo smoke): PUT settings com a
+  chave Gemini real do Lucas → `POST /api/images/generate` →
+  **`400 "provedor respondeu HTTP 429"`** — o Google REAL respondeu
+  (chave autentica: 429 de **cota Free Tier = 0/dia pra imagem**,
+  provado direto no endpoint `/v1beta/interactions` nos dois modelos
+  — não é 401/403). Código e caminho provados; **gerar imagem de
+  verdade exige tier pago ou chave Z.ai** (US$ 0,015/imagem).
+- **Quirks de ambiente CRUZADOS no caminho** (apostados aqui pra
+  não morder de novo): PS 5.1 derruba `Invoke-RestMethod` com
+  `Content-Type`/`User-Agent` em hashtable de GET (uso `curl.exe`);
+  `--User-Agent` reservado em 5.1; primeiro token do Lucas (`ghp_`)
+  veio 401 → o novo (`guilhermdugrau-jpg`) validado em `/user` antes
+  de mover qualquer coisa.
+
+### Limites honestos desta etapa
+
+- **Rollback é manual**: backup da versão anterior fica em
+  `<dataDir>/updates/backups/<versão>-antes-<carimbo>\` — restaurar
+  é robocopy /MIR do backup de volta (UPDATE_GUIDE traz o passo).
+- Se um release mexer em **dependências** (`package.json`), o update
+  troca só o dist — `npm install` manual é necessário (documentado;
+  bundle não carrega `node_modules`).
+- Drafts nunca aparecem (API não expõe); `development` ≡ `beta`
+  enquanto o GitHub não mudar isso; troca de intervalo do auto-check
+  vale após reinício (o timer só é criado no boot).
+
 ## Pendências conhecidas
 
 - Envio real no WhatsApp (nota de voz, som, imagem, vídeo, texto
@@ -706,7 +860,13 @@ de senha) + do rótulo "Dashboard completo" do cronograma do README
   sessão dele (todas as rotas já respondem honesto com 409 até lá).
 - Geração de imagem de verdade (com arquivo no catálogo e foto no
   WhatsApp) depende do Lucas configurar provedor com chave paga no
-  painel — Z.ai (US$ 0,015/imagem) ou Gemini/OpenAI-compat.
+  painel — Z.ai (US$ 0,015/imagem) ou Gemini/OpenAI-compat. A chave
+  Gemini de teste autentica, mas o **Free Tier do Google está com
+  cota 0/dia pra imagem** (HTTP 429 provado) — trocar tier em
+  https://ai.dev/rate-limit ou usar Z.ai.
+- Revogar o token GitHub da conta descartável
+  (`guilhermdugrau-jpg`) quando o push dos docs terminar — ele só
+  existe pra publicar releases/push, o atualizador nunca o usa.
 - Confirmação visual da CSP no navegador (clicar todas as abas com
   o build de prod): headers já provados no smoke; recursos são
   self/data/blob por projeto.
