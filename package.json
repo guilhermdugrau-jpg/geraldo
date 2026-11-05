@@ -1,0 +1,26 @@
+{
+  "name": "geraldo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Geraldo AI — Assistente nordestino inteligente para WhatsApp",
+  "license": "MIT",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c cyan,green \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "dev:backend": "npm run dev -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "start": "npm run start -w backend",
+    "typecheck": "npm run typecheck -w backend && npm run typecheck -w frontend",
+    "test": "npm run test -w backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

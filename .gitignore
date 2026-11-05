@@ -1,0 +1,14 @@
+# dependências e builds
+node_modules/
+dist/
+
+# dados do usuário (banco, config, sessão, mídia, updates) — NUNCA no git
+data/
+*.log
+*.tsbuildinfo
+
+# ambiente e lixo local
+.env
+.env.*
+smoke-*/
+*.cmd.tmp

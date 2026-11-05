@@ -1,0 +1,27 @@
+{
+  "name": "@geraldo/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Painel web do Geraldo AI",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite --port 3000 --strictPort",
+    "build": "tsc -b && vite build",
+    "start": "vite preview --port 3000 --strictPort",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.1",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7"
+  }
+}
